@@ -209,7 +209,7 @@ func (e *Engine) Start() {
 
 	select {
 	case <-chSigInt:
-		log.Info("Receieve Ctrl-C, start to shutdown")
+		e.logger.Info("Receieve Ctrl-C, start to shutdown")
 	case <-chComplete:
 	}
 
