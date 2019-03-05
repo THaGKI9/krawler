@@ -13,7 +13,7 @@ type Engine struct {
 	downloader       Downloader
 	logger           *log.Logger
 	queue            *Queue
-	processors       map[string]Processor
+	processors       map[string]FuncProcessor
 	shuttingDown     bool
 	downloadingCount int
 }
@@ -23,14 +23,14 @@ func NewEngine() *Engine {
 	engine := &Engine{
 		logger:     log.New(os.Stdout, "[Krawler] ", log.LstdFlags),
 		queue:      NewQueue(),
-		processors: make(map[string]Processor),
+		processors: make(map[string]FuncProcessor),
 	}
 
 	return engine
 }
 
 // AddProcessor registers processor into engine
-func (e *Engine) AddProcessor(processor Processor, aliases ...string) *Engine {
+func (e *Engine) AddProcessor(processor FuncProcessor, aliases ...string) *Engine {
 	for _, alias := range aliases {
 		e.logger.Printf("[Info] Added processor with alias `%s`", alias)
 		e.processors[alias] = processor
@@ -64,7 +64,7 @@ func (e *Engine) handleDownloadTask(chResult chan *DownloadResult) {
 	task := result.Task
 
 	processor := e.processors[task.ProcessorName]
-	items, tasks, err := processor.Parse(result)
+	items, tasks, err := processor(result)
 
 	taskName := task.String()
 	if err != nil {

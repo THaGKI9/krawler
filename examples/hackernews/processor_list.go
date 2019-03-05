@@ -22,12 +22,8 @@ type NewsItem struct {
 	Descripts   string `xml:"description"`
 }
 
-// ListFeedPageProcessor is a processor to process RSS feed of Hackernewes
-type ListFeedPageProcessor struct {
-}
-
-// Parse implements Processor#Parse
-func (p ListFeedPageProcessor) Parse(downloadResult *krawler.DownloadResult) (*list.List, []*krawler.Task, error) {
+// RSSFeedParser implements Processor#Parse
+func RSSFeedParser(downloadResult *krawler.DownloadResult) (*list.List, []*krawler.Task, error) {
 	var rss RSS
 	content, err := ioutil.ReadAll(downloadResult.Content)
 	if err != nil {
