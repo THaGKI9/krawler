@@ -1,0 +1,10 @@
+logger:
+  level: debug
+  console: true
+  filepath: ""
+request:
+  userAgent: krawler/developing
+  timeout: 5000
+  maxRetryTimes: 3
+  followRedirect: true
+  concurrency: 5

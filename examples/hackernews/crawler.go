@@ -1,14 +1,17 @@
 package main
 
-import "github.com/thagki9/krawler"
+import (
+	"github.com/thagki9/krawler"
+)
 
 func main() {
-	engine := krawler.NewEngine()
+	engine := krawler.NewEngine("./krawler.yaml")
 	engine.AddProcessor(RSSFeedParser, "hackernews")
 	engine.AddTask(&krawler.Task{
-		URL:           "https://news.ycombinator.com/rss",
-		Method:        "GET",
-		ProcessorName: "hackernews",
+		URL:              "https://news.ycombinator.com/rss",
+		Method:           "GET",
+		ProcessorName:    "hackernews",
+		AllowDuplication: true,
 	})
 	engine.Start()
 }

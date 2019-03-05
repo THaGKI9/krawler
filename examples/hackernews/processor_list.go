@@ -3,7 +3,6 @@ package main
 import (
 	"container/list"
 	"encoding/xml"
-	"io/ioutil"
 
 	"github.com/thagki9/krawler"
 )
@@ -23,20 +22,15 @@ type NewsItem struct {
 }
 
 // RSSFeedParser implements Processor#Parse
-func RSSFeedParser(downloadResult *krawler.DownloadResult) (*list.List, []*krawler.Task, error) {
+func RSSFeedParser(downloadResult *krawler.DownloadResult) (*krawler.ParseResult, error) {
 	if downloadResult.Err != nil {
-		return nil, nil, downloadResult.Err
+		return nil, downloadResult.Err
 	}
 
 	var rss RSS
-	content, err := ioutil.ReadAll(downloadResult.Content)
+	err := xml.Unmarshal(downloadResult.Content, &rss)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	err = xml.Unmarshal(content, &rss)
-	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	items := list.New()
@@ -45,9 +39,10 @@ func RSSFeedParser(downloadResult *krawler.DownloadResult) (*list.List, []*krawl
 	}
 
 	task := &krawler.Task{
-		URL:           "https://news.ycombinator.com/rss",
-		Method:        "GET",
-		ProcessorName: "hackernews",
+		URL:              "https://news.ycombinator.com/rss",
+		Method:           "GET",
+		ProcessorName:    "hackernews",
+		AllowDuplication: true,
 	}
-	return items, []*krawler.Task{task}, nil
+	return &krawler.ParseResult{Items: items, Tasks: []*krawler.Task{task}}, nil
 }

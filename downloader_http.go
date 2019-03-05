@@ -1,10 +1,15 @@
 package krawler
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // ErrDownloadTimeout indicates the download failed because of timeout
@@ -16,22 +21,26 @@ var ErrDownloaderShuttingDown = errors.New("The downloaded is currently shutting
 
 // HTTPDownloader implements a simple http downloader
 type HTTPDownloader struct {
-	// Request timeout in seconds, default: 5
-	Timeout time.Duration
-
-	concurrency  int
-	running      chan int
-	start        bool
-	shuttingDown bool
+	logger         *log.Logger
+	userAgent      string
+	timeout        time.Duration
+	maxRetryTimes  int
+	followRedirect bool
+	concurrency    int
+	running        chan int
+	start          bool
+	shuttingDown   bool
 }
 
 // NewHTTPDownloader returns a HTTP Downloader objects
-func NewHTTPDownloader() *HTTPDownloader {
-	d := &HTTPDownloader{
-		Timeout: 5 * time.Second,
-	}
-
-	d.SetConcurrency(5)
+func NewHTTPDownloader(config *Config) *HTTPDownloader {
+	d := new(HTTPDownloader)
+	d.logger = config.Logger
+	d.timeout = config.RequestTimeout
+	d.maxRetryTimes = config.RequestMaxRetryTimes
+	d.userAgent = config.RequestUserAgent
+	d.followRedirect = config.RequestFollowRedirect
+	d.SetConcurrency(config.RequestConcurrency)
 	return d
 }
 
@@ -55,31 +64,52 @@ func (d *HTTPDownloader) finishTask() {
 }
 
 func (d *HTTPDownloader) doDownload(task *Task, doDownloadResultChannel chan *DownloadResult) {
-	request, err := http.NewRequest(task.Method, task.URL, task.Body)
+	task.Meta.DownloadStartTime = time.Now()
+	task.Meta.DownloadFinishTime = time.Time{}
+	defer func(finishTime *time.Time) {
+		*finishTime = time.Now()
+	}(&task.Meta.DownloadFinishTime)
+
+	result := &DownloadResult{
+		Err:  nil,
+		Task: task,
+	}
+
+	var body io.Reader
+	if task.Body != nil {
+		body = bytes.NewReader(task.Body)
+	}
+	request, err := http.NewRequest(task.Method, task.URL, body)
 	if err != nil {
-		doDownloadResultChannel <- &DownloadResult{
-			Err:  fmt.Errorf("Create request instance failed, %v", err),
-			Task: task,
-		}
+		result.Err = fmt.Errorf("Create request instance failed, %v", err)
+		doDownloadResultChannel <- result
 		return
 	}
-	request.Header = task.Headers
+	request.Header = make(http.Header)
+	request.Header["User-Agent"] = []string{d.userAgent}
+	for field, value := range task.Headers {
+		request.Header[field] = value
+	}
+	for _, cookie := range task.Cookies {
+		request.AddCookie(cookie)
+	}
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		doDownloadResultChannel <- &DownloadResult{
-			Err:  fmt.Errorf("Request failed, %v", err),
-			Task: task,
-		}
+		result.Err = fmt.Errorf("Request failed, %v", err)
+		doDownloadResultChannel <- result
 		return
 	}
 
-	doDownloadResultChannel <- &DownloadResult{
-		Err:     nil,
-		Task:    task,
-		Content: response.Body,
-		Headers: response.Header,
+	result.StatusCode = response.StatusCode
+	result.Cookies = response.Cookies()
+	result.Headers = response.Header
+	result.Content, err = ioutil.ReadAll(response.Body)
+	if err != nil {
+		result.Err = fmt.Errorf("Read body failed, %v", err)
 	}
+
+	doDownloadResultChannel <- result
 }
 
 func (d *HTTPDownloader) handleDownloadResult(task *Task, doDownloadResultChannel chan *DownloadResult, resultChannel chan *DownloadResult) {
@@ -88,7 +118,7 @@ func (d *HTTPDownloader) handleDownloadResult(task *Task, doDownloadResultChanne
 	select {
 	case result := <-doDownloadResultChannel:
 		resultChannel <- result
-	case <-time.After(d.Timeout):
+	case <-time.After(d.timeout):
 		resultChannel <- &DownloadResult{Task: task, Err: ErrDownloadTimeout}
 	}
 }
