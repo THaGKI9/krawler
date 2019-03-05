@@ -24,6 +24,10 @@ type NewsItem struct {
 
 // RSSFeedParser implements Processor#Parse
 func RSSFeedParser(downloadResult *krawler.DownloadResult) (*list.List, []*krawler.Task, error) {
+	if downloadResult.Err != nil {
+		return nil, nil, downloadResult.Err
+	}
+
 	var rss RSS
 	content, err := ioutil.ReadAll(downloadResult.Content)
 	if err != nil {
