@@ -1,6 +1,9 @@
 package krawler
 
-import "net/http"
+import (
+	"errors"
+	"net/http"
+)
 
 // DownloadResult defines how download result should be organized
 type DownloadResult struct {
@@ -18,3 +21,10 @@ type Downloader interface {
 	Download(task *Task, resultChannel chan *DownloadResult)
 	Stop()
 }
+
+// ErrDownloadTimeout indicates the download failed because of timeout
+var ErrDownloadTimeout = errors.New("Download timeout")
+
+// ErrDownloaderShuttingDown indicates the downloader is currently shutting down
+// and no new task is allow to be scheduled
+var ErrDownloaderShuttingDown = errors.New("The downloaded is currently shutting down")

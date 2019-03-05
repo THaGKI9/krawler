@@ -12,13 +12,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// ErrDownloadTimeout indicates the download failed because of timeout
-var ErrDownloadTimeout = errors.New("Download timeout")
-
-// ErrDownloaderShuttingDown indicates the downloader is currently shutting down
-// and no new task is allow to be scheduled
-var ErrDownloaderShuttingDown = errors.New("The downloaded is currently shutting down")
-
 // HTTPDownloader implements a simple http downloader
 type HTTPDownloader struct {
 	logger         *log.Logger
