@@ -2,7 +2,6 @@ package krawler
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -33,19 +32,13 @@ func NewHTTPDownloader(config *Config) *HTTPDownloader {
 	d.maxRetryTimes = config.RequestMaxRetryTimes
 	d.userAgent = config.RequestUserAgent
 	d.followRedirect = config.RequestFollowRedirect
-	d.SetConcurrency(config.RequestConcurrency)
+	d.setConcurrency(config.RequestConcurrency)
 	return d
 }
 
-// SetConcurrency sets concurrency of the downloader before the download starts
-func (d *HTTPDownloader) SetConcurrency(newConcurrency int) error {
-	if d.start || len(d.running) > 0 {
-		return errors.New("Cannot set up after download started")
-	}
-
+func (d *HTTPDownloader) setConcurrency(newConcurrency int) {
 	d.running = make(chan int, newConcurrency)
 	d.concurrency = newConcurrency
-	return nil
 }
 
 func (d *HTTPDownloader) startTask() {
