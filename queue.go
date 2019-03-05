@@ -2,9 +2,9 @@ package krawler
 
 import (
 	"container/list"
-	"log"
-	"os"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // Queue holds all tasks. Follow FIFO rule.
@@ -21,7 +21,7 @@ func NewQueue() *Queue {
 		tasks:   list.New(),
 		visited: make(map[string]bool),
 		mutex:   &sync.Mutex{},
-		logger:  log.New(os.Stdout, "[KrawlerQueue]", log.LstdFlags),
+		logger:  log.New(),
 	}
 }
 

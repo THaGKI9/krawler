@@ -1,11 +1,12 @@
 package krawler
 
 import (
-	"log"
 	"os"
 	"os/signal"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // Engine is the core of the crawler system.
@@ -21,7 +22,7 @@ type Engine struct {
 // NewEngine creates a engine instance
 func NewEngine() *Engine {
 	engine := &Engine{
-		logger:     log.New(os.Stdout, "[Krawler] ", log.LstdFlags),
+		logger:     log.New(),
 		queue:      NewQueue(),
 		processors: make(map[string]FuncProcessor),
 	}
