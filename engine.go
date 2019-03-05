@@ -152,6 +152,22 @@ func (e *Engine) handleDownloadTask(chResult chan *DownloadResult) {
 	}
 }
 
+func (e *Engine) runTask(task *Task) {
+	defer func() {
+		err := recover()
+		if err != nil {
+			e.logger.Errorf("Recover from panic while running task %s, panic: %s", task.Name(), err)
+			e.RetryTask(task)
+		}
+	}()
+
+	e.logger.Debugf("Run task %s", task.Name())
+	ch := make(chan *DownloadResult)
+	e.downloadingCount++
+	e.downloader.Download(task, ch)
+	go e.handleDownloadTask(ch)
+}
+
 func (e *Engine) work(complete chan bool) {
 	for !e.shuttingDown {
 		// Pick a task
@@ -167,15 +183,10 @@ func (e *Engine) work(complete chan bool) {
 			}
 		}
 
-		// Schedule this task
-		e.logger.Debugf("Schedule task %s", task.Name())
-		ch := make(chan *DownloadResult)
-		e.downloadingCount++
-		e.downloader.Download(task, ch)
-		go e.handleDownloadTask(ch)
+		e.runTask(task)
 	}
 
-	e.logger.Infof("No new tasks to be scheduled. Crawler stops")
+	e.logger.Infof("No new tasks to be run. Crawler stops")
 	complete <- true
 }
 
