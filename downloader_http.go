@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -22,6 +23,7 @@ type HTTPDownloader struct {
 	running        chan int
 	start          bool
 	shuttingDown   bool
+	once           sync.Pool
 }
 
 // NewHTTPDownloader returns a HTTP Downloader objects
@@ -49,7 +51,7 @@ func (d *HTTPDownloader) finishTask() {
 	<-d.running
 }
 
-func (d *HTTPDownloader) doDownload(task *Task, doDownloadResultChannel chan *DownloadResult) {
+func (d *HTTPDownloader) doDownload(task *Task, chDoResult chan *DownloadResult) {
 	task.Meta.DownloadStartTime = time.Now()
 	task.Meta.DownloadFinishTime = time.Time{}
 	defer func(finishTime *time.Time) {
@@ -68,7 +70,7 @@ func (d *HTTPDownloader) doDownload(task *Task, doDownloadResultChannel chan *Do
 	request, err := http.NewRequest(task.Method, task.URL, body)
 	if err != nil {
 		result.Err = fmt.Errorf("Create request instance failed, %v", err)
-		doDownloadResultChannel <- result
+		chDoResult <- result
 		return
 	}
 	request.Header = make(http.Header)
@@ -83,7 +85,7 @@ func (d *HTTPDownloader) doDownload(task *Task, doDownloadResultChannel chan *Do
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		result.Err = fmt.Errorf("Request failed, %v", err)
-		doDownloadResultChannel <- result
+		chDoResult <- result
 		return
 	}
 
@@ -95,24 +97,24 @@ func (d *HTTPDownloader) doDownload(task *Task, doDownloadResultChannel chan *Do
 		result.Err = fmt.Errorf("Read body failed, %v", err)
 	}
 
-	doDownloadResultChannel <- result
+	chDoResult <- result
 }
 
-func (d *HTTPDownloader) handleDownloadResult(task *Task, doDownloadResultChannel chan *DownloadResult, resultChannel chan *DownloadResult) {
+func (d *HTTPDownloader) handleDownloadResult(task *Task, chDoResult chan *DownloadResult, chResult chan *DownloadResult) {
 	defer d.finishTask()
 
 	select {
-	case result := <-doDownloadResultChannel:
-		resultChannel <- result
+	case result := <-chDoResult:
+		chResult <- result
 	case <-time.After(d.timeout):
-		resultChannel <- &DownloadResult{Task: task, Err: ErrDownloadTimeout}
+		chResult <- &DownloadResult{Task: task, Err: ErrDownloadTimeout}
 	}
 }
 
 // Download read information from task and download content respectly
-func (d *HTTPDownloader) Download(task *Task, resultChannel chan *DownloadResult) {
+func (d *HTTPDownloader) Download(task *Task, chResult chan *DownloadResult) {
 	if d.shuttingDown {
-		resultChannel <- &DownloadResult{Task: task, Err: ErrDownloaderShuttingDown}
+		chResult <- &DownloadResult{Task: task, Err: ErrDownloaderShuttingDown}
 		return
 	}
 	d.start = true
@@ -120,7 +122,7 @@ func (d *HTTPDownloader) Download(task *Task, resultChannel chan *DownloadResult
 	d.startTask()
 	ch := make(chan *DownloadResult)
 	go d.doDownload(task, ch)
-	go d.handleDownloadResult(task, ch, resultChannel)
+	go d.handleDownloadResult(task, ch, chResult)
 }
 
 // Stop waits for workers to stop and return
