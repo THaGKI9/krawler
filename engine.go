@@ -110,7 +110,13 @@ func (e *Engine) RetryTask(task *Task) {
 	task.Meta.RetryTimes++
 	task.Meta.Retried = true
 	e.queue.Enqueue(task, false, EnqueuePositionHead)
-	e.logger.Debugf("Task %s has been rechedule", task.Name())
+	e.logger.Debugf("Task %s has been rechedule for retrying", task.Name())
+}
+
+// RescheduleTask will put the task in the front of the queue and will not check duplication
+func (e *Engine) RescheduleTask(task *Task) {
+	e.queue.Enqueue(task, false, EnqueuePositionHead)
+	e.logger.Debugf("Task %s has been rechedule for state persisting", task.Name())
 }
 
 func (e *Engine) handleDownloadTask(chResult chan *DownloadResult) {
@@ -121,7 +127,10 @@ func (e *Engine) handleDownloadTask(chResult chan *DownloadResult) {
 	task := result.Task
 	taskName := task.Name()
 
-	if result.Err != nil {
+	if result.Err == ErrDownloaderShuttingDown {
+		e.RescheduleTask(task)
+		return
+	} else if result.Err != nil {
 		e.logger.Errorf("Download task %s failed because: %v", taskName, result.Err)
 		e.RetryTask(task)
 		return
