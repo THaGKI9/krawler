@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -18,7 +19,7 @@ type Engine struct {
 	logger           *log.Logger
 	processors       map[string]FuncProcessor
 	shuttingDown     bool
-	downloadingCount int
+	downloadingCount *int64
 }
 
 // NewEngine creates a engine instance from file configuration
@@ -34,9 +35,10 @@ func NewEngine(configPath string) *Engine {
 // NewEngineFromConfig creates a engine instance
 func NewEngineFromConfig(config *Config) *Engine {
 	engine := &Engine{
-		queue:      NewQueue(config),
-		processors: make(map[string]FuncProcessor),
-		logger:     config.Logger,
+		queue:            NewQueue(config),
+		processors:       make(map[string]FuncProcessor),
+		logger:           config.Logger,
+		downloadingCount: new(int64),
 
 		Config: config,
 	}
@@ -121,7 +123,7 @@ func (e *Engine) RescheduleTask(task *Task) {
 
 func (e *Engine) handleDownloadTask(chResult chan *DownloadResult) {
 	defer func() {
-		e.downloadingCount--
+		atomic.AddInt64(e.downloadingCount, -1)
 	}()
 	result := <-chResult
 	task := result.Task
@@ -163,7 +165,7 @@ func (e *Engine) runTask(task *Task) {
 
 	e.logger.Debugf("Run task %s", task.Name())
 	ch := make(chan *DownloadResult)
-	e.downloadingCount++
+	atomic.AddInt64(e.downloadingCount, 1)
 	e.downloader.Download(task, ch)
 	go e.handleDownloadTask(ch)
 }
@@ -173,12 +175,13 @@ func (e *Engine) work(complete chan bool) {
 		// Pick a task
 		task := e.queue.Pop()
 		if task == nil {
-			if e.downloadingCount > 0 {
+			downloadingCount := atomic.LoadInt64(e.downloadingCount)
+			if downloadingCount > 0 {
 				// TODO: wait for processor
 				e.logger.Debug("There are no new tasks in the queue, wait for downloading to stop")
 				time.Sleep(2 * time.Second)
 				continue
-			} else if e.downloadingCount == 0 {
+			} else if downloadingCount == 0 {
 				break
 			}
 		}
