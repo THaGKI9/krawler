@@ -61,6 +61,7 @@ func NewConfigFromRawConfig(rawConfig *RawConfig) (*Config, error) {
 		fileHook := lfshook.LfsHook{}
 		fileHook.SetFormatter(logFormatter)
 		fileHook.SetDefaultPath(rawConfig.Logger.FilePath)
+		logger.AddHook(&fileHook)
 	}
 
 	if rawConfig.Request.Timeout <= 0 {
