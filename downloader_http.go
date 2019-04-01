@@ -69,7 +69,7 @@ func (d *HTTPDownloader) doDownload(task *Task, chDoResult chan *DownloadResult)
 	}
 	request, err := http.NewRequest(task.Method, task.URL, body)
 	if err != nil {
-		result.Err = fmt.Errorf("Create request instance failed, %v", err)
+		result.Err = fmt.Errorf("create request instance failed, reason: %v", err)
 		chDoResult <- result
 		return
 	}
@@ -84,7 +84,7 @@ func (d *HTTPDownloader) doDownload(task *Task, chDoResult chan *DownloadResult)
 
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		result.Err = fmt.Errorf("Request failed, %v", err)
+		result.Err = fmt.Errorf("request failed, reason: %v", err)
 		chDoResult <- result
 		return
 	}
@@ -94,7 +94,7 @@ func (d *HTTPDownloader) doDownload(task *Task, chDoResult chan *DownloadResult)
 	result.Headers = response.Header
 	result.Content, err = ioutil.ReadAll(response.Body)
 	if err != nil {
-		result.Err = fmt.Errorf("Read body failed, %v", err)
+		result.Err = fmt.Errorf("read body failed, reason: %v", err)
 	}
 
 	chDoResult <- result
