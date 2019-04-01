@@ -13,7 +13,6 @@ import (
 type HTTPDownloader struct {
 	userAgent      string
 	timeout        time.Duration
-	maxRetryTimes  int
 	followRedirect bool
 	concurrency    int
 	running        chan int
@@ -23,11 +22,10 @@ type HTTPDownloader struct {
 // NewHTTPDownloader returns a HTTP Downloader objects
 func NewHTTPDownloader(config *Config) *HTTPDownloader {
 	d := new(HTTPDownloader)
-	d.timeout = config.RequestTimeout
-	d.maxRetryTimes = config.RequestMaxRetryTimes
-	d.userAgent = config.RequestUserAgent
-	d.followRedirect = config.RequestFollowRedirect
-	d.setConcurrency(config.RequestConcurrency)
+	d.timeout = config.Request.Timeout
+	d.userAgent = config.Request.UserAgent
+	d.followRedirect = config.Request.FollowRedirect
+	d.setConcurrency(config.Request.Concurrency)
 	return d
 }
 

@@ -1,12 +1,16 @@
 package main
 
 import (
+	log "github.com/sirupsen/logrus"
 	"github.com/thagki9/krawler"
 )
 
 func main() {
+	config := krawler.GetDefaultConfig()
+	config.Logger.Level = log.DebugLevel
+
 	engine := krawler.GetEngine()
-	engine.Initialize("./krawler.yaml")
+	engine.Initialize(config)
 	engine.InstallQueue(krawler.NewLocalQueue())
 	engine.InstallProcessor(RSSFeedParser, "hackernews")
 	engine.AddTask(&krawler.Task{

@@ -31,24 +31,15 @@ func GetEngine() *Engine {
 	return defaultEngine
 }
 
-// NewEngine creates a engine instance from file configuration
-func (e *Engine) Initialize(configPath string) {
-	config, err := LoadConfigFromPath(configPath)
-	if err != nil {
-		panic(err)
-	}
-
-	e.InitializeFromConfig(config)
-}
-
-// NewEngineFromConfig creates a engine instance
-func (e *Engine) InitializeFromConfig(config *Config) {
+// Initialize the engine with given config
+func (e *Engine) Initialize(config *Config) {
 	log.SetOutput(os.Stdout)
 	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 
 	e.processors = make(map[string]FuncProcessor)
 	e.downloadingCount = new(int64)
 	e.Config = config
+	config.checkConfig()
 }
 
 // InstallQueue installs a task queue onto the engine
@@ -99,14 +90,14 @@ func (e *Engine) AddTask(tasks ...*Task) {
 func (e *Engine) RetryTask(task *Task) {
 	taskName := task.Name()
 
-	if task.Meta.RetryTimes >= e.Config.RequestMaxRetryTimes {
+	if task.Meta.RetryTimes >= e.Config.Request.MaxRetryTimes {
 		log.Errorf("Task %s is removed because it has exceeds maximum retry times", taskName)
 		return
 	}
 
 	task.Meta.RetryTimes++
 
-	err := e.queue.Enqueue(task, false, EnqueuePositionTail)
+	err := e.queue.Enqueue(task, true, EnqueuePositionTail)
 	if err != nil {
 		log.Errorf("Fail to reschedule a task %s for retrying, reason: %v", taskName, err)
 	} else {
@@ -117,7 +108,7 @@ func (e *Engine) RetryTask(task *Task) {
 
 // RescheduleTask will put the task in the front of the queue and will not check duplication
 func (e *Engine) RescheduleTask(task *Task) {
-	err := e.queue.Enqueue(task, false, EnqueuePositionHead)
+	err := e.queue.Enqueue(task, true, EnqueuePositionHead)
 	if err != nil {
 		log.Errorf("Fail to reschedule task %s for state persisting and task may lost! Reason: %v", task.Name(), err)
 	} else {
