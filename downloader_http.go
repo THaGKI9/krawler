@@ -8,13 +8,10 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // HTTPDownloader implements a simple http downloader
 type HTTPDownloader struct {
-	logger         *log.Logger
 	userAgent      string
 	timeout        time.Duration
 	maxRetryTimes  int
@@ -29,7 +26,6 @@ type HTTPDownloader struct {
 // NewHTTPDownloader returns a HTTP Downloader objects
 func NewHTTPDownloader(config *Config) *HTTPDownloader {
 	d := new(HTTPDownloader)
-	d.logger = config.Logger
 	d.timeout = config.RequestTimeout
 	d.maxRetryTimes = config.RequestMaxRetryTimes
 	d.userAgent = config.RequestUserAgent

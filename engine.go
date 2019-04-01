@@ -15,81 +15,80 @@ type Engine struct {
 	Config *Config
 
 	downloader       Downloader
-	queue            *Queue
-	logger           *log.Logger
+	queue            Queue
 	processors       map[string]FuncProcessor
 	shuttingDown     bool
 	downloadingCount *int64
 }
 
+var defaultEngine *Engine
+
+func GetEngine() *Engine {
+	if defaultEngine == nil {
+		defaultEngine = &Engine{}
+	}
+
+	return defaultEngine
+}
+
 // NewEngine creates a engine instance from file configuration
-func NewEngine(configPath string) *Engine {
+func (e *Engine) Initialize(configPath string) {
 	config, err := LoadConfigFromPath(configPath)
 	if err != nil {
 		panic(err)
 	}
 
-	return NewEngineFromConfig(config)
+	e.InitializeFromConfig(config)
 }
 
 // NewEngineFromConfig creates a engine instance
-func NewEngineFromConfig(config *Config) *Engine {
-	engine := &Engine{
-		queue:            NewQueue(config),
-		processors:       make(map[string]FuncProcessor),
-		logger:           config.Logger,
-		downloadingCount: new(int64),
+func (e *Engine) InitializeFromConfig(config *Config) {
+	log.SetOutput(os.Stdout)
+	log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 
-		Config: config,
-	}
-	return engine
+	e.processors = make(map[string]FuncProcessor)
+	e.downloadingCount = new(int64)
+	e.Config = config
 }
 
-// AddProcessor registers processor into engine
-func (e *Engine) AddProcessor(processor FuncProcessor, aliases ...string) {
+// InstallQueue installs a task queue onto the engine
+func (e *Engine) InstallQueue(queue Queue) {
+	if e.queue != nil {
+		panic("a queue has already been added!")
+	}
+
+	e.queue = queue
+}
+
+// InstallProcessor registers processor into engine
+func (e *Engine) InstallProcessor(processor FuncProcessor, aliases ...string) {
 	for _, alias := range aliases {
-		e.logger.Debugf("Added processor with alias `%s`", alias)
+		log.Debugf("Added processor with alias `%s`", alias)
 		e.processors[alias] = processor
 	}
 }
 
-// SetDownloader sets up a downloader for the crawler
-func (e *Engine) SetDownloader(downloader Downloader) {
+// InstallDownloader sets up a downloader for the crawler
+func (e *Engine) InstallDownloader(downloader Downloader) {
 	e.downloader = downloader
 }
 
 // AddTask adds task to the queue
 func (e *Engine) AddTask(tasks ...*Task) {
 	for _, task := range tasks {
+		// copy the task so that any manipulation to the task won't affect task in the queue
 		taskCopy := *task
 
 		if _, exists := e.processors[task.ProcessorName]; !exists {
-			e.logger.Warnf("Ignore task with processor missing. ProcessName=%s", task.ProcessorName)
+			log.Warnf("Ignore task with processor missing. ProcessName=%s", task.ProcessorName)
 			continue
 		}
 
-		success := e.queue.Enqueue(&taskCopy, !task.AllowDuplication, EnqueuePositionTail)
-		if success {
-			e.logger.Infof("Ignore duplicated task %s", taskCopy.Name())
-		} else {
-			task.Meta.EnqueueTime = time.Now()
-		}
-	}
-}
-
-// AddTaskFront adds task to the front of the queue
-func (e *Engine) AddTaskFront(tasks ...*Task) {
-	for _, task := range tasks {
-		taskCopy := *task
-
-		if _, exists := e.processors[task.ProcessorName]; !exists {
-			e.logger.Warnf("Ignore task with processor missing. ProcessName=%s", task.ProcessorName)
-			continue
-		}
-
-		success := e.queue.Enqueue(&taskCopy, !task.AllowDuplication, EnqueuePositionHead)
-		if success {
-			e.logger.Infof("Ignore duplicated task %s", taskCopy.Name())
+		err := e.queue.Enqueue(&taskCopy, task.AllowDuplication, EnqueuePositionTail)
+		if err == ErrQueueItemDuplicated {
+			log.Infof("Ignore duplicated task %s", taskCopy.Name())
+		} else if err != nil {
+			log.Errorf("Fail to add task to queue, reason: %v", err)
 		} else {
 			task.Meta.EnqueueTime = time.Now()
 		}
@@ -100,31 +99,37 @@ func (e *Engine) AddTaskFront(tasks ...*Task) {
 func (e *Engine) RetryTask(task *Task) {
 	taskName := task.Name()
 
-	if task.Meta.RetryTimes > 0 {
-		e.logger.Errorf("Task %s has already retried for %d times", taskName, task.Meta.RetryTimes)
-	}
-
 	if task.Meta.RetryTimes >= e.Config.RequestMaxRetryTimes {
-		e.logger.Errorf("Task %s is removed because it has exceeds maximum retry times", task.Name())
+		log.Errorf("Task %s is removed because it has exceeds maximum retry times", taskName)
 		return
 	}
 
 	task.Meta.RetryTimes++
-	task.Meta.Retried = true
-	e.queue.Enqueue(task, false, EnqueuePositionHead)
-	e.logger.Debugf("Task %s has been reschedule for retrying", task.Name())
+
+	err := e.queue.Enqueue(task, false, EnqueuePositionTail)
+	if err != nil {
+		log.Errorf("Fail to reschedule a task %s for retrying, reason: %v", taskName, err)
+	} else {
+		task.Meta.EnqueueTime = time.Now()
+		log.Debugf("Task %s has been reschedule for retrying", taskName)
+	}
 }
 
 // RescheduleTask will put the task in the front of the queue and will not check duplication
 func (e *Engine) RescheduleTask(task *Task) {
-	e.queue.Enqueue(task, false, EnqueuePositionHead)
-	e.logger.Debugf("Task %s has been reschedule for state persisting", task.Name())
+	err := e.queue.Enqueue(task, false, EnqueuePositionHead)
+	if err != nil {
+		log.Errorf("Fail to reschedule task %s for state persisting and task may lost! Reason: %v", task.Name(), err)
+	} else {
+		log.Debugf("Task %s has been reschedule for state persisting", task.Name())
+	}
 }
 
 func (e *Engine) handleDownloadTask(chResult chan *DownloadResult) {
 	defer func() {
 		atomic.AddInt64(e.downloadingCount, -1)
 	}()
+
 	result := <-chResult
 	task := result.Task
 	taskName := task.Name()
@@ -133,7 +138,7 @@ func (e *Engine) handleDownloadTask(chResult chan *DownloadResult) {
 		e.RescheduleTask(task)
 		return
 	} else if result.Err != nil {
-		e.logger.Errorf("Download task %s failed because: %v", taskName, result.Err)
+		log.Errorf("Download task %s failed, reason: %v", taskName, result.Err)
 		e.RetryTask(task)
 		return
 	}
@@ -141,14 +146,14 @@ func (e *Engine) handleDownloadTask(chResult chan *DownloadResult) {
 	processor := e.processors[task.ProcessorName]
 	parseResult, err := processor(result)
 	if err != nil {
-		e.logger.Errorf("Process task %s failed because: %v", taskName, err)
+		log.Errorf("Process task %s failed, reason: %v", taskName, err)
 		if !task.DontRetryIfProcessorFails {
 			e.RetryTask(task)
 		}
 		return
 	}
 
-	e.logger.Infof("Retrieve %d items from %s", parseResult.Items.Len(), taskName)
+	log.Infof("Retrieve %d items from %s", parseResult.Items.Len(), taskName)
 	if len(parseResult.Tasks) > 0 {
 		e.AddTask(parseResult.Tasks...)
 	}
@@ -158,12 +163,12 @@ func (e *Engine) runTask(task *Task) {
 	defer func() {
 		err := recover()
 		if err != nil {
-			e.logger.Errorf("Recover from panic while running task %s, panic: %s", task.Name(), err)
+			log.Errorf("Recover from panic while running task %s, panic: %s", task.Name(), err)
 			e.RetryTask(task)
 		}
 	}()
 
-	e.logger.Debugf("Run task %s", task.Name())
+	log.Debugf("Run task %s", task.Name())
 	ch := make(chan *DownloadResult)
 	atomic.AddInt64(e.downloadingCount, 1)
 	e.downloader.Download(task, ch)
@@ -173,12 +178,18 @@ func (e *Engine) runTask(task *Task) {
 func (e *Engine) work(complete chan bool) {
 	for !e.shuttingDown {
 		// Pick a task
-		task := e.queue.Pop()
+		task, err := e.queue.Pop()
+		if err != nil {
+			// TODO: better fallback policy
+			log.Errorf("Fail to retrieve a task from the queue, reason: %v", err)
+			task = nil
+		}
+
 		if task == nil {
 			downloadingCount := atomic.LoadInt64(e.downloadingCount)
 			if downloadingCount > 0 {
 				// TODO: wait for processor
-				e.logger.Debug("There are no new tasks in the queue, wait for downloading to stop")
+				log.Debug("There are no new tasks in the queue, wait for downloading to stop")
 				time.Sleep(2 * time.Second)
 				continue
 			} else if downloadingCount == 0 {
@@ -186,22 +197,22 @@ func (e *Engine) work(complete chan bool) {
 			}
 		}
 
-		e.runTask(task)
+		e.runTask(task.(*Task))
 	}
 
-	e.logger.Infof("No new tasks to be run. Crawler stops")
+	log.Infof("No new tasks to be run. Crawler stops")
 	complete <- true
 }
 
 // Start launches the crawler
 func (e *Engine) Start() {
 	if len(e.processors) == 0 {
-		e.logger.Fatal("No processor has been configure")
+		log.Fatal("No processor has been configure")
 	}
 
 	if e.downloader == nil {
-		e.logger.Warn("Downloader has not been set up. HTTPDownloader would be set up as default downloader")
-		e.SetDownloader(NewHTTPDownloader(e.Config))
+		log.Warn("Downloader has not been set up. HTTPDownloader would be set up as default downloader")
+		e.InstallDownloader(NewHTTPDownloader(e.Config))
 	}
 
 	chComplete := make(chan bool)
@@ -212,7 +223,7 @@ func (e *Engine) Start() {
 
 	select {
 	case <-chSigInt:
-		e.logger.Info("Receive Ctrl-C, start to shutdown")
+		log.Info("Receive Ctrl-C, start to shutdown")
 	case <-chComplete:
 	}
 

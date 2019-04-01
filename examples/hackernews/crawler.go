@@ -5,8 +5,10 @@ import (
 )
 
 func main() {
-	engine := krawler.NewEngine("./krawler.yaml")
-	engine.AddProcessor(RSSFeedParser, "hackernews")
+	engine := krawler.GetEngine()
+	engine.Initialize("./krawler.yaml")
+	engine.InstallQueue(krawler.NewLocalQueue())
+	engine.InstallProcessor(RSSFeedParser, "hackernews")
 	engine.AddTask(&krawler.Task{
 		URL:              "https://news.ycombinator.com/rss",
 		Method:           "GET",

@@ -22,9 +22,11 @@ type Downloader interface {
 	Stop()
 }
 
-// ErrDownloadTimeout indicates the download failed because of timeout
-var ErrDownloadTimeout = errors.New("download timeout")
+var (
+	// ErrDownloadTimeout indicates the download failed because of timeout
+	ErrDownloadTimeout = errors.New("download timeout")
 
-// ErrDownloaderShuttingDown indicates the downloader is currently shutting down
-// and no new task is allow to be scheduled
-var ErrDownloaderShuttingDown = errors.New("the downloader is currently shutting down")
+	// ErrDownloaderShuttingDown indicates the downloader is currently shutting down
+	// and no new task is allow to be scheduled
+	ErrDownloaderShuttingDown = errors.New("the downloader is currently shutting down")
+)

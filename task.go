@@ -55,5 +55,4 @@ type Meta struct {
 	DownloadStartTime  time.Time
 	DownloadFinishTime time.Time
 	RetryTimes         int
-	Retried            bool
 }
