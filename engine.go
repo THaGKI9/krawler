@@ -3,6 +3,7 @@ package krawler
 import (
 	"os"
 	"os/signal"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -45,7 +46,7 @@ func (e *Engine) Initialize(config *Config) {
 // InstallQueue installs a task queue onto the engine
 func (e *Engine) InstallQueue(queue Queue) {
 	if e.queue != nil {
-		panic("a queue has already been added!")
+		log.Fatal("a queue has already been added!")
 	}
 
 	e.queue = queue
@@ -55,12 +56,19 @@ func (e *Engine) InstallQueue(queue Queue) {
 func (e *Engine) InstallProcessor(processor FuncProcessor, aliases ...string) {
 	for _, alias := range aliases {
 		log.Debugf("Added processor with alias `%s`", alias)
+		if _, exists := e.processors[alias]; exists {
+			log.Fatalf("A processor with alias `%s` has already been added.", alias)
+		}
 		e.processors[alias] = processor
 	}
 }
 
 // InstallDownloader sets up a downloader for the crawler
 func (e *Engine) InstallDownloader(downloader Downloader) {
+	if e.downloader != nil {
+		log.Fatal("a downloader has already been added!")
+	}
+
 	e.downloader = downloader
 }
 
@@ -192,13 +200,18 @@ func (e *Engine) work(complete chan bool) {
 
 // Start launches the crawler
 func (e *Engine) Start() {
-	if len(e.processors) == 0 {
-		log.Fatal("No processor has been configure")
-	}
-
 	if e.downloader == nil {
-		log.Warn("Downloader has not been set up. HTTPDownloader would be set up as default downloader")
-		e.InstallDownloader(NewHTTPDownloader(e.Config))
+		log.Fatal("No downloader has been installed")
+	}
+	log.Debugf("Use downloader: %s", reflect.TypeOf(e.downloader).Elem().Name())
+
+	if e.queue == nil {
+		log.Fatal("No queue has been installed")
+	}
+	log.Debugf("Use queue: %s", reflect.TypeOf(e.queue).Elem().Name())
+
+	if len(e.processors) == 0 {
+		log.Fatal("No processor has been installed")
 	}
 
 	chComplete := make(chan bool)
