@@ -104,13 +104,19 @@ func LoadConfigFromFile(file *os.File) (*Config, error) {
 
 // LoadConfigFromPath loads config from file path.
 // The file will be closed by this function.
-func LoadConfigFromPath(configPath string) (*Config, error) {
+func LoadConfigFromPath(configPath string) (config *Config, err error) {
 	file, err := os.Open(configPath)
-	defer file.Close()
+	defer func() {
+		if newErr := file.Close(); newErr != nil {
+			err = newErr
+			config = nil
+		}
+	}()
 
 	if err != nil {
 		return nil, err
 	}
 
-	return LoadConfigFromFile(file)
+	config, err = LoadConfigFromFile(file)
+	return
 }
