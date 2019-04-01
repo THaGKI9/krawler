@@ -3,7 +3,7 @@ package krawler
 import "container/list"
 
 // FuncProcessor defines a function that read downloaded content and
-// organize structed items and extract new tasks
+// organize structured items and extract new tasks
 type FuncProcessor = func(*DownloadResult) (*ParseResult, error)
 
 // ParseResult defines what a processor should return including items extracting

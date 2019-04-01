@@ -18,7 +18,7 @@ type NewsItem struct {
 	Link        string `xml:"link"`
 	PublishDate string `xml:"pubDate"`
 	Comment     string `xml:"comments"`
-	Descripts   string `xml:"description"`
+	Description string `xml:"description"`
 }
 
 // RSSFeedParser implements Processor#Parse

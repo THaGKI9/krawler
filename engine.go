@@ -112,13 +112,13 @@ func (e *Engine) RetryTask(task *Task) {
 	task.Meta.RetryTimes++
 	task.Meta.Retried = true
 	e.queue.Enqueue(task, false, EnqueuePositionHead)
-	e.logger.Debugf("Task %s has been rechedule for retrying", task.Name())
+	e.logger.Debugf("Task %s has been reschedule for retrying", task.Name())
 }
 
 // RescheduleTask will put the task in the front of the queue and will not check duplication
 func (e *Engine) RescheduleTask(task *Task) {
 	e.queue.Enqueue(task, false, EnqueuePositionHead)
-	e.logger.Debugf("Task %s has been rechedule for state persisting", task.Name())
+	e.logger.Debugf("Task %s has been reschedule for state persisting", task.Name())
 }
 
 func (e *Engine) handleDownloadTask(chResult chan *DownloadResult) {
@@ -193,7 +193,7 @@ func (e *Engine) work(complete chan bool) {
 	complete <- true
 }
 
-// Start launchs the crawler
+// Start launches the crawler
 func (e *Engine) Start() {
 	if len(e.processors) == 0 {
 		e.logger.Fatal("No processor has been configure")
@@ -212,7 +212,7 @@ func (e *Engine) Start() {
 
 	select {
 	case <-chSigInt:
-		e.logger.Info("Receieve Ctrl-C, start to shutdown")
+		e.logger.Info("Receive Ctrl-C, start to shutdown")
 	case <-chComplete:
 	}
 

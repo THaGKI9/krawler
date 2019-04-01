@@ -111,7 +111,7 @@ func (d *HTTPDownloader) handleDownloadResult(task *Task, chDoResult chan *Downl
 	}
 }
 
-// Download read information from task and download content respectly
+// Download read information from task and download content in respect to the task
 func (d *HTTPDownloader) Download(task *Task, chResult chan *DownloadResult) {
 	if d.shuttingDown {
 		chResult <- &DownloadResult{Task: task, Err: ErrDownloaderShuttingDown}
