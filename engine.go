@@ -144,18 +144,13 @@ func (e *Engine) handleDownloadTask(chResult chan *DownloadResult) {
 	}
 
 	processor := e.processors[task.ProcessorName]
-	parseResult, err := processor(result)
+	err := processor(result, e)
 	if err != nil {
 		log.Errorf("Process task %s failed, reason: %v", taskName, err)
 		if !task.DontRetryIfProcessorFails {
 			e.RetryTask(task)
 		}
 		return
-	}
-
-	log.Infof("Retrieve %d items from %s", parseResult.Items.Len(), taskName)
-	if len(parseResult.Tasks) > 0 {
-		e.AddTask(parseResult.Tasks...)
 	}
 }
 
@@ -235,12 +230,17 @@ func (e *Engine) shutdownElegantly() {
 	e.shuttingDown = true
 	wg := sync.WaitGroup{}
 
-	wg.Add(1)
+	wg.Add(2)
 
-	go func(downloader Downloader) {
-		downloader.Stop()
+	go func() {
+		e.downloader.Shutdown()
 		wg.Done()
-	}(e.downloader)
+	}()
+
+	go func() {
+		e.queue.Shutdown()
+		wg.Done()
+	}()
 
 	wg.Wait()
 }

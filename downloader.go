@@ -18,8 +18,13 @@ type DownloadResult struct {
 
 // Downloader define a downloader
 type Downloader interface {
-	Download(task *Task, resultChannel chan *DownloadResult)
-	Stop()
+	// Download receive a task, perform downloading and send the download result
+	// to the channel.
+	Download(*Task, chan<- *DownloadResult)
+
+	// Shutdown Indicates the downloader to wait for downloading task and stop receiving
+	// new tasks.
+	Shutdown()
 }
 
 var (

@@ -6,7 +6,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"sync"
 	"time"
 )
 
@@ -18,9 +17,7 @@ type HTTPDownloader struct {
 	followRedirect bool
 	concurrency    int
 	running        chan int
-	start          bool
 	shuttingDown   bool
-	once           sync.Pool
 }
 
 // NewHTTPDownloader returns a HTTP Downloader objects
@@ -96,33 +93,30 @@ func (d *HTTPDownloader) doDownload(task *Task, chDoResult chan *DownloadResult)
 	chDoResult <- result
 }
 
-func (d *HTTPDownloader) handleDownloadResult(task *Task, chDoResult chan *DownloadResult, chResult chan *DownloadResult) {
-	defer d.finishTask()
-
-	select {
-	case result := <-chDoResult:
-		chResult <- result
-	case <-time.After(d.timeout):
-		chResult <- &DownloadResult{Task: task, Err: ErrDownloadTimeout}
-	}
-}
-
 // Download read information from task and download content in respect to the task
-func (d *HTTPDownloader) Download(task *Task, chResult chan *DownloadResult) {
+func (d *HTTPDownloader) Download(task *Task, chResult chan<- *DownloadResult) {
 	if d.shuttingDown {
 		chResult <- &DownloadResult{Task: task, Err: ErrDownloaderShuttingDown}
 		return
 	}
-	d.start = true
 
 	d.startTask()
 	ch := make(chan *DownloadResult)
 	go d.doDownload(task, ch)
-	go d.handleDownloadResult(task, ch, chResult)
+
+	go func() {
+		select {
+		case result := <-ch:
+			chResult <- result
+		case <-time.After(d.timeout):
+			chResult <- &DownloadResult{Task: task, Err: ErrDownloadTimeout}
+		}
+		d.finishTask()
+	}()
 }
 
-// Stop waits for workers to stop and return
-func (d *HTTPDownloader) Stop() {
+// Shutdown waits for workers to stop and return
+func (d *HTTPDownloader) Shutdown() {
 	d.shuttingDown = true
 	for len(d.running) > 0 {
 		time.Sleep(1 * time.Second)
