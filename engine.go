@@ -84,7 +84,7 @@ func (e *Engine) AddTask(tasks ...*Task) {
 		}
 
 		err := e.queue.Enqueue(&taskCopy, task.AllowDuplication, EnqueuePositionTail)
-		if err == ErrQueueItemDuplicated {
+		if err == ErrQueueTaskDuplicated {
 			log.Infof("Ignore duplicated task %s", taskCopy.Name())
 		} else if err != nil {
 			log.Errorf("Fail to add task to queue, reason: %v", err)
@@ -169,7 +169,9 @@ func (e *Engine) runTask(task *Task) {
 	go e.handleDownloadTask(ch)
 }
 
-func (e *Engine) work(complete chan bool) {
+func (e *Engine) work(complete chan<- bool) {
+	log.Info("Engine starts to work")
+
 	for !e.shuttingDown {
 		// Pick a task
 		task, err := e.queue.Pop()

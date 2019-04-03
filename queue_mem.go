@@ -5,65 +5,65 @@ import (
 	"sync"
 )
 
-// LocalQueue holds a series of items. Follow FIFO rule.
+// LocalQueue holds a series of tasks. Follow FIFO rule.
 type LocalQueue struct {
 	mutex   *sync.Mutex
-	items   *list.List
+	tasks   *list.List
 	visited map[string]bool
 }
 
 // NewLocalQueue creates a queue which basic storage is a double linked list
 func NewLocalQueue() *LocalQueue {
 	queue := &LocalQueue{
-		items:   list.New(),
+		tasks:   list.New(),
 		visited: make(map[string]bool),
 		mutex:   &sync.Mutex{},
 	}
 	return queue
 }
 
-// Transfer the items in the list into persisted storage
+// Transfer the tasks in the list into persisted storage
 func (q *LocalQueue) Shutdown() {
 }
 
-// Enqueue add a item into the queue
-func (q *LocalQueue) Enqueue(item Hashable, allowDuplication bool, position EnqueuePosition) error {
+// Enqueue add a task into the queue
+func (q *LocalQueue) Enqueue(task *Task, allowDuplication bool, position EnqueuePosition) error {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
-	if !allowDuplication && !q.checkDuplication(item) {
-		return ErrQueueItemDuplicated
+	if !allowDuplication && !q.checkDuplication(task) {
+		return ErrQueueTaskDuplicated
 	}
 
 	switch position {
 	case EnqueuePositionHead:
-		q.items.PushFront(item)
+		q.tasks.PushFront(task)
 	case EnqueuePositionTail:
-		q.items.PushBack(item)
+		q.tasks.PushBack(task)
 	}
 
 	return nil
 }
 
-// Pop returns a item in the front most and remove it from the queue
-func (q *LocalQueue) Pop() (Hashable, error) {
+// Pop returns a task in the front most and remove it from the queue
+func (q *LocalQueue) Pop() (*Task, error) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 
-	if q.items.Len() == 0 {
+	if q.tasks.Len() == 0 {
 		return nil, nil
 	}
 
-	return q.items.Remove(q.items.Front()).(Hashable), nil
+	return q.tasks.Remove(q.tasks.Front()).(*Task), nil
 }
 
 // Len returns the length of the queue
 func (q *LocalQueue) Len() (int64, error) {
-	return int64(q.items.Len()), nil
+	return int64(q.tasks.Len()), nil
 }
 
-func (q *LocalQueue) checkDuplication(item Hashable) bool {
-	hashCode := item.HashCode()
+func (q *LocalQueue) checkDuplication(task *Task) bool {
+	hashCode := task.HashCode()
 	if visited := q.visited[hashCode]; visited {
 		return false
 	}
